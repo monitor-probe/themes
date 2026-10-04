@@ -66,7 +66,8 @@ const OFFLINE_FOR = 5 * 3600
 function node(n, now) {
   const [, country, group, cycle, currency, price, expires, remark, state] = n.seed
   const { memTotal, diskTotal } = sizes(n.id)
-  const month = Math.round(noise(n.id, 8) * 800 * GiB)
+  // Whole even GiB, so every half below is a whole number of bytes as well.
+  const month = 2 * Math.round(noise(n.id, 8) * 400) * GiB
   const total = month * 6
   const s = sample(n.id, now)
   const online = state !== "offline"
@@ -87,10 +88,10 @@ function node(n, now) {
     mem_total: memTotal, swap_total: GiB, disk_total: diskTotal, agent_version: "1.2.0",
     last_seen: online ? now : now - OFFLINE_FOR,
     billing_cycle: cycle, currency, price,
-    expires_at: expires === null ? "" : plusDays(expires), expires_in: expires,
+    expires_at: expires === null ? null : plusDays(expires), expires_in: expires,
     traffic_limit: 1024 * GiB, traffic_mode: "sum", traffic_reset_day: 1, month_start: today().slice(0, 8) + "01",
     month_rx: month, month_tx: month / 2, month_used: month * 1.5,
-    day_rx: month / 20, day_tx: month / 40, total_rx: total, total_tx: total / 2,
+    day_rx: Math.round(month / 20), day_tx: Math.round(month / 40), total_rx: total, total_tx: total / 2,
   }
 }
 
@@ -114,27 +115,37 @@ function history(n, url) {
   const until = state === "fresh" ? since - 1 : state === "offline" ? now - OFFLINE_FOR : now
   const { memTotal, diskTotal } = sizes(n.id)
   const series = q.get("series")
-  const metrics = [], ping = []
-  for (let ts = since; ts <= until; ts += step) {
+  const metrics = [], ping = [], loss = {}
+  if (series !== "ping") for (let ts = since; ts <= until; ts += step) {
     const minutes = ts + step > until ? Math.max(1, Math.floor((until - ts) / 60)) : step / 60
     const s = sample(n.id, ts), peak = 1 + 2 * noise(n.id, ts, 11)
-    if (series !== "ping") metrics.push({
+    metrics.push({
       ts, minutes, cpu: s.cpu, cpu_max: Math.min(100, s.cpu * peak),
       mem_used: Math.round(memTotal * (0.3 + 0.2 * noise(n.id, ts, 12))),
       disk_used: Math.round(diskTotal * (0.1 + 0.8 * noise(n.id, 10))),
       net_rx: s.rx, net_tx: s.tx, net_rx_max: Math.round(s.rx * peak), net_tx_max: Math.round(s.tx * peak),
     })
-    if (series !== "metrics") for (const task_id of [1, 2, 3]) {
-      const lost = noise(n.id, ts, task_id) < 0.03
+  }
+  // Probe by probe, as the hub orders them. A bucket of several samples carries
+  // the band they spread over, and the window's loss is listed only where some
+  // was lost.
+  if (series !== "metrics") for (const task_id of [1, 2, 3]) {
+    let lost = 0, rows = 0
+    for (let ts = since; ts <= until; ts += step, rows++) {
+      if (noise(n.id, ts, task_id) < 0.03) {
+        lost++
+        ping.push({ ts, task_id, latency: null, loss: 100 })
+        continue
+      }
       const latency = Math.round(30 * task_id + 40 * noise(n.id, task_id) + 10 * noise(n.id, ts, task_id, 1))
-      ping.push(lost ? { ts, task_id, latency: null, loss: 100 } : { ts, task_id, latency })
+      const spread = Math.round(2 + 15 * noise(n.id, ts, task_id, 2))
+      const row = { ts, task_id, latency }
+      if (step > 60) row.band = [latency - spread, latency + spread]
+      ping.push(row)
     }
+    if (lost) loss[task_id] = (100 * lost) / rows
   }
-  return {
-    metrics, ping, step,
-    probes: series === "metrics" ? {} : { 1: "电信", 2: "联通", 3: "移动" },
-    loss: series === "metrics" ? {} : { 1: 0, 2: 1, 3: 3 },
-  }
+  return { metrics, ping, step, probes: series === "metrics" ? {} : { 1: "电信", 2: "联通", 3: "移动" }, loss }
 }
 
 // Kept open, a socket pushes every two seconds like the hub's. Measured on the

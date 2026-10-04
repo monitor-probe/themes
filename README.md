@@ -26,7 +26,7 @@ https://github.com/<owner>/<repo>
 | `theme.json` 的 `url` 是这个仓库的地址 | 一键更新从 `url` 指向的仓库取新版 |
 | `theme.json` 的 `version` 与 release 的 tag 一致（`v1.2.0` 对 `1.2.0`） | 不一致时，每次点更新都会重装一遍 |
 | 包里有 `preview.png` | 列表页的截图 |
-| `short` 不与已收录的主题重复，不是 `main` 或 `default`；转成小写、字母数字以外的字符换成 `-` 之后不超过 28 个字符 | 预览地址是 `https://<转换后的 short>.monitor-themes.pages.dev` |
+| `short` 不与已收录的主题重复，不是 `main` 或 `default`；转成小写、字母数字以外的字符换成 `-` 之后不超过 28 个字符，且不以 `-` 开头或结尾 | 预览地址是 `https://<转换后的 short>.monitor-themes.pages.dev` |
 
 打包可以照抄默认主题的 [release.yml](https://github.com/monitor-probe/monitor-theme-default/blob/main/.github/workflows/release.yml)：推送 `v*` tag 时检查 tag 与 `version` 一致，构建后打包 `dist`、`theme.json`、`preview.png` 并发布 release。
 

@@ -6,7 +6,8 @@
 // themes/<alias>/ (one preview deployment per theme).
 //
 // Exit status: 0 when every entry passes, 2 when some fail (the output is still
-// complete without them), 1 on an error of this script's own. With --base, only
+// complete without them), 1 on an error of this script's own or when GitHub or
+// the hub cannot be reached, leaving the site as it was. With --base, only
 // entries absent from that list can cause a 2: a pull request is not failed for
 // a theme it did not add.
 
@@ -49,13 +50,26 @@ function repoOf(line) {
   return m ? `${m[1]}/${m[2]}` : null
 }
 
+// A failure that says nothing about the theme being checked. It ends the run
+// rather than failing the entry: on the daily run a failed entry is taken off
+// the site and its preview deleted, which one outage would do to every theme.
+class Outage extends Error {}
+
 async function github(url, accept = "application/vnd.github+json") {
   const headers = { accept, "x-github-api-version": "2022-11-28" }
   if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+  const unreachable = (e) => {
+    throw new Outage(`GitHub unreachable for ${url}: ${e.message}`)
+  }
   const res = await fetch(url.startsWith("https://") ? url : `https://api.github.com/${url}`, { headers })
+    .catch(unreachable)
   if (res.status === 404) return null
+  const limited = res.headers.get("x-ratelimit-remaining") === "0"
+  if (res.status >= 500 || res.status === 401 || res.status === 429 || limited) {
+    throw new Outage(`GitHub ${res.status} for ${url}`)
+  }
   if (!res.ok) throw new Error(`GitHub ${res.status} for ${url}: ${await res.text()}`)
-  return accept.includes("json") ? res.json() : Buffer.from(await res.arrayBuffer())
+  return (accept.includes("json") ? res.json() : res.arrayBuffer().then((b) => Buffer.from(b))).catch(unreachable)
 }
 
 // ---- the hub ----
@@ -66,6 +80,8 @@ async function startHub() {
   const db = path.join(WORK, "monitor.db")
   const args = ["--listen", `127.0.0.1:${PORT}`, "--db", db, "--themes", path.join(WORK, "themes")]
   const hub = spawn(hubBinary, args, { stdio: ["ignore", "ignore", "inherit"] })
+  // However the run ends, including a failure before the first theme.
+  process.on("exit", () => hub.kill())
   for (let i = 0; ; i++) {
     if (await fetch(`${HUB}/api/me`).then((r) => r.ok, () => false)) break
     if (i > 100) throw new Error("hub did not start")
@@ -82,7 +98,7 @@ async function startHub() {
   })
   if (!res.ok) throw new Error(`hub sign-in failed: ${await res.text()}`)
   const cookie = res.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ")
-  return { hub, cookie, themes: path.join(WORK, "themes") }
+  return { cookie, themes: path.join(WORK, "themes") }
 }
 
 // Through the panel's upload route, in the pieces it accepts, so the archive
@@ -95,6 +111,8 @@ async function install(cookie, archive) {
       method: "POST",
       headers: { cookie, "content-type": "application/octet-stream" },
       body: archive.subarray(offset, offset + PIECE),
+    }).catch((e) => {
+      throw new Outage(`hub unreachable: ${e.message}`)
     })
     if (!res.ok) throw new Error(`hub 拒绝安装：${await res.text()}`)
     const body = await res.json()
@@ -154,6 +172,8 @@ async function check(line, cookie, themes) {
   const name = alias(theme.short)
   if (name.length > MAX_ALIAS) problems.push(`short 超过 ${MAX_ALIAS} 个字符`)
   if (name === "main") problems.push("short 不能是 main")
+  // A DNS label neither starts nor ends with a hyphen.
+  if (/^-|-$/.test(name)) problems.push("short 不能以 - 或 _ 开头或结尾")
   if (theme.short === "default" && info.owner.login !== "monitor-probe") {
     problems.push("short 不能是 default，它会顶替 hub 内置的默认主题")
   }
@@ -194,38 +214,37 @@ function apiDigest() {
 }
 
 async function main() {
-  const lines = entries(path.join(ROOT, "themes.txt"))
   const known = base && fs.existsSync(base) ? new Set(entries(base).map((l) => l.toLowerCase())) : null
   const isNew = (line) => !known || !known.has(line.toLowerCase())
+  // Entries already listed go first, so that a line a pull request inserts
+  // above one of them cannot take its preview address and still pass.
+  const lines = entries(path.join(ROOT, "themes.txt")).sort((a, b) => isNew(a) - isNew(b))
 
   for (const dir of ["site", "themes"]) fs.rmSync(path.join(OUT, dir), { recursive: true, force: true })
   fs.cpSync(path.join(ROOT, "site"), path.join(OUT, "site"), { recursive: true })
   fs.mkdirSync(path.join(OUT, "site", "previews"), { recursive: true })
   fs.mkdirSync(path.join(OUT, "themes"), { recursive: true })
 
-  const { hub, cookie, themes } = await startHub()
+  const { cookie, themes } = await startHub()
   const listed = [], failed = [], seen = new Set()
-  try {
-    for (const line of lines) {
-      // The later of two identical lines is always the one being added.
-      const duplicate = seen.has(line.toLowerCase())
-      seen.add(line.toLowerCase())
-      try {
-        if (duplicate) throw new Error("重复登记")
-        const { dir, entry } = await check(line, cookie, themes)
-        const clash = listed.find((t) => t.alias === entry.alias)
-        if (clash) throw new Error(`short 与已收录的 ${clash.repo} 冲突（预览地址都是 ${entry.alias}）`)
-        copyStripped(path.join(dir, "dist"), path.join(OUT, "themes", entry.alias))
-        fs.copyFileSync(path.join(dir, "preview.png"), path.join(OUT, "site", "previews", `${entry.alias}.png`))
-        listed.push(entry)
-        console.log(`ok    ${line} → ${entry.short} ${entry.version}`)
-      } catch (e) {
-        failed.push({ line, reason: e.message, new: duplicate || isNew(line) })
-        console.log(`fail  ${line}：${e.message}`)
-      }
+  for (const line of lines) {
+    // The later of two identical lines is always the one being added.
+    const duplicate = seen.has(line.toLowerCase())
+    seen.add(line.toLowerCase())
+    try {
+      if (duplicate) throw new Error("重复登记")
+      const { dir, entry } = await check(line, cookie, themes)
+      const clash = listed.find((t) => t.alias === entry.alias)
+      if (clash) throw new Error(`short 与已收录的 ${clash.repo} 冲突（预览地址都是 ${entry.alias}）`)
+      copyStripped(path.join(dir, "dist"), path.join(OUT, "themes", entry.alias))
+      fs.copyFileSync(path.join(dir, "preview.png"), path.join(OUT, "site", "previews", `${entry.alias}.png`))
+      listed.push(entry)
+      console.log(`ok    ${line} → ${entry.short} ${entry.version}`)
+    } catch (e) {
+      if (e instanceof Outage) throw e
+      failed.push({ line, reason: e.message, new: duplicate || isNew(line) })
+      console.log(`fail  ${line}：${e.message}`)
     }
-  } finally {
-    hub.kill()
   }
 
   listed.sort((a, b) => b.released.localeCompare(a.released))
