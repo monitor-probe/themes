@@ -86,7 +86,7 @@ function node(n, now) {
     os: "Debian GNU/Linux 13 (trixie)", kernel: "6.12.0-amd64", arch: "x86_64", virt: "kvm",
     cpu_name: "AMD EPYC 9654 96-Core Processor", cpu_cores: 1 + (n.id % 4),
     mem_total: memTotal, swap_total: GiB, disk_total: diskTotal, agent_version: "1.2.0",
-    last_seen: online ? now : now - OFFLINE_FOR,
+    last_seen: online ? now : now - OFFLINE_FOR, last_seen_ago: online ? 0 : OFFLINE_FOR,
     billing_cycle: cycle, currency, price,
     expires_at: expires === null ? null : plusDays(expires), expires_in: expires,
     traffic_limit: 1024 * GiB, traffic_mode: "sum", traffic_reset_day: 1, month_start: today().slice(0, 8) + "01",
