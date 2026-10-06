@@ -12,3 +12,4 @@ https://github.com/akanotanin/monitor-theme-rakugaki
 https://github.com/freetodo/monitor-theme-liquid-glass
 https://github.com/3922510-creator/monitor-theme-nebula
 https://github.com/tom2almighty/monitor-theme-design
+https://github.com/WAOR/Monitor-SAO
