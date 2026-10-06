@@ -149,13 +149,15 @@ function history(n, url) {
 }
 
 // Kept open, a socket pushes every two seconds like the hub's. Measured on the
-// free plan: three sockets held 15 minutes, 450 frames each, none dropped.
-function socket() {
+// free plan: three sockets held 15 minutes, 450 frames each, none dropped. With
+// `gzip`, as the hub answers `?gzip`: the same JSON gzipped, in a binary message.
+function socket(gzip) {
   const [client, server] = Object.values(new WebSocketPair())
   server.accept()
-  const push = () => {
+  const push = async () => {
     try {
-      server.send(JSON.stringify(snapshot()))
+      const frame = JSON.stringify(snapshot())
+      server.send(gzip ? await new Response(new Blob([frame]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer() : frame)
     } catch {
       clearInterval(timer)
     }
@@ -178,7 +180,7 @@ export function onRequest({ request }) {
   }
   if (path === "/api/nodes") return json(snapshot())
   if (path === "/api/ws") {
-    return request.headers.get("upgrade") === "websocket" ? socket() : text(426, "需要 WebSocket")
+    return request.headers.get("upgrade") === "websocket" ? socket(url.searchParams.has("gzip")) : text(426, "需要 WebSocket")
   }
   const m = /^\/api\/nodes\/(\d+)\/metrics$/.exec(path)
   const target = m && NODES.find((n) => n.id === +m[1])
