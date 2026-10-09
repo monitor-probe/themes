@@ -6,9 +6,12 @@
 // A theme is redeployed only when it is new, its version changed, or the
 // stand-in API changed, judged against the themes.json currently live. The
 // gallery goes last, so it never links a preview that is not yet up and a
-// failed run leaves the live index stating what is actually deployed. A theme
-// no longer listed has its preview deleted: a delisted theme would otherwise
-// remain served under this project's name.
+// failed run leaves the live index stating what is actually deployed.
+//
+// Then every deployment but the newest successful one of each listed branch is
+// deleted. Each stays reachable at its own address with whatever theme version,
+// stand-in hub and server code it was built with, so a delisted theme or a
+// superseded release would otherwise remain served under this project's name.
 
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
@@ -48,20 +51,38 @@ async function main() {
   }
   deploy(path.join("out", "site"), "main")
 
-  const listed = new Set(index.themes.map((t) => t.alias))
-  const gone = [...before.keys()].filter((a) => !listed.has(a))
-  if (!gone.length) return
   // Listed in full before deleting, since each deletion shifts later pages.
-  const doomed = []
-  for (let page = 1; ; page++) {
-    const { result } = await cloudflare(`${API}/deployments?env=preview&per_page=25&page=${page}`)
-    if (!result.length) break
-    doomed.push(...result.filter((d) => gone.includes(d.deployment_trigger?.metadata?.branch)))
+  const all = []
+  for (const env of ["production", "preview"]) {
+    for (let page = 1; ; page++) {
+      const { result } = await cloudflare(`${API}/deployments?env=${env}&per_page=25&page=${page}`)
+      if (!result.length) break
+      all.push(...result)
+    }
   }
-  for (const d of doomed) {
-    console.log(`deleting ${d.deployment_trigger.metadata.branch} deployment ${d.id}`)
+  for (const d of superseded(all, new Set(["main", ...index.themes.map((t) => t.alias)]))) {
+    console.log(`deleting ${branch(d)} deployment ${d.id}`)
     await cloudflare(`${API}/deployments/${d.id}?force=true`, { method: "DELETE" })
   }
+}
+
+const branch = (d) => d.deployment_trigger?.metadata?.branch
+
+// Everything but the deployments of each branch in `served` its alias may point
+// at: the newest successful one, and the newest of all, which the API can list
+// before reporting its success.
+function superseded(deployments, served) {
+  const kept = new Set()
+  const newest = new Set(), succeeded = new Set()
+  for (const d of [...deployments].sort((a, b) => b.created_on.localeCompare(a.created_on))) {
+    const b = branch(d)
+    if (!served.has(b)) continue
+    const ok = d.latest_stage?.status === "success"
+    if (!newest.has(b) || (ok && !succeeded.has(b))) kept.add(d.id)
+    newest.add(b)
+    if (ok) succeeded.add(b)
+  }
+  return deployments.filter((d) => !kept.has(d.id))
 }
 
 main().catch((e) => {
