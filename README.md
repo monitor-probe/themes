@@ -46,11 +46,12 @@ PR 的检查会下载你仓库最新正式 release 里的 `theme.tar.gz`，装�
 
 每个主题部署在自己的子域名下，路径和装在 hub 上时一样：`/assets/...`、客户端路由、刷新详情页都能用。
 
-`/api` 由 `functions/api` 里的一个假 hub 回答，形状与 hub 1.3.2 的公开接口一致：
+`/api` 由 `preview/hub.js` 里的一个假 hub 在浏览器里回答：它注入在每个页面的 `<head>` 最前面，接管页面里对 `/api` 的 `fetch`、`XMLHttpRequest` 和 WebSocket，不发网络请求，形状与 hub 1.3.2 的公开接口一致：
 
 - `GET /api/me`、`/api/nodes`、`/api/nodes/{id}/metrics`、`/api/themes/{short}/config`、`/api/ws`，WebSocket 每 2 秒推送一次
 - 30 个节点，包括离线、刚连上还没上报、分组、已过期和今天到期、多种货币与付款周期、公开备注、超长名字
 - 未登录，主题设置为空，主题按自己的默认值显示；写操作一律拒绝，`/admin` 没有后台
+- 在 Service Worker 或 Web Worker 里发出的 `/api` 请求接管不到，拿不到数据
 
 包里的 `_worker.js`、`_routes.json`、`_redirects`、`_headers`、`404.html` 会在部署前删掉：它们在 Cloudflare Pages 上会被当作服务端代码或配置。
 

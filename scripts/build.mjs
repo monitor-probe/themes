@@ -28,10 +28,16 @@ const PORT = 9911
 const HUB = `http://127.0.0.1:${PORT}`
 
 // Pages reads these from a deployment as configuration or server code: with
-// _worker.js present, a theme would run its own code in place of functions/
-// and with the project's environment. 404.html is dropped so unknown paths fall
-// back to index.html, as the hub serves them.
-const STRIPPED = ["_worker.js", "_routes.json", "_redirects", "_headers", "404.html", "functions"]
+// _worker.js present, a theme would run its own code with the project's
+// environment. 404.html is dropped so unknown paths fall back to index.html,
+// as the hub serves them.
+const STRIPPED = ["_worker.js", "_routes.json", "_redirects", "_headers", "404.html"]
+
+// The stand-in hub, served beside each theme and loaded first in each of its
+// pages. Root-relative, since a client route such as /node/3 is answered with
+// index.html as well.
+const HUB_SCRIPT = "monitor-preview-hub.js"
+const HUB_TAG = `<script src="/${HUB_SCRIPT}"></script>`
 
 // A branch alias is the name lowercased with every other character a hyphen.
 // Beyond 28 characters Pages truncates it and appends a random suffix (measured
@@ -197,19 +203,35 @@ async function check(line, cookie, themes) {
 
 // ---- output ----
 
-function copyStripped(from, to) {
-  fs.cpSync(from, to, { recursive: true })
-  for (const name of STRIPPED) fs.rmSync(path.join(to, name), { recursive: true, force: true })
+// First in <head>, so the stand-in hub is in place before any of the theme's
+// scripts runs. Without a <head>, right after the doctype: anything before it
+// would switch the page to quirks mode. Comments are blanked for the search, so
+// a <head> written inside one is not taken for the element.
+function inject(html) {
+  const bare = html.replace(/<!--[\s\S]*?-->/g, (c) => " ".repeat(c.length))
+  const at = /<head\b[^>]*>/i.exec(bare) ?? /^\s*(<!doctype[^>]*>)?/i.exec(bare)
+  const end = at.index + at[0].length
+  return html.slice(0, end) + HUB_TAG + html.slice(end)
 }
 
-// Changes to the stand-in API reach a theme only when its preview is
-// redeployed, so its digest is part of what decides whether to redeploy.
+function preview(from, to) {
+  fs.cpSync(from, to, { recursive: true })
+  for (const name of STRIPPED) fs.rmSync(path.join(to, name), { recursive: true, force: true })
+  for (const file of fs.readdirSync(to, { recursive: true })) {
+    if (!/\.html?$/i.test(file)) continue
+    const full = path.join(to, file)
+    // Byte for byte, so a page in an encoding other than UTF-8 is left intact.
+    fs.writeFileSync(full, inject(fs.readFileSync(full, "latin1")), "latin1")
+  }
+  fs.copyFileSync(path.join(ROOT, "preview", "hub.js"), path.join(to, HUB_SCRIPT))
+}
+
+// Changes to the stand-in hub, or to how a preview is put together here, reach
+// a theme only when its preview is redeployed, so their digest is part of what
+// decides whether to redeploy.
 function apiDigest() {
   const hash = createHash("sha256")
-  for (const file of fs.readdirSync(path.join(ROOT, "functions"), { recursive: true }).sort()) {
-    const full = path.join(ROOT, "functions", file)
-    if (fs.statSync(full).isFile()) hash.update(file).update(fs.readFileSync(full))
-  }
+  for (const file of ["preview/hub.js", "scripts/build.mjs"]) hash.update(fs.readFileSync(path.join(ROOT, file)))
   return hash.digest("hex").slice(0, 16)
 }
 
@@ -236,7 +258,7 @@ async function main() {
       const { dir, entry } = await check(line, cookie, themes)
       const clash = listed.find((t) => t.alias === entry.alias)
       if (clash) throw new Error(`short 与已收录的 ${clash.repo} 冲突（预览地址都是 ${entry.alias}）`)
-      copyStripped(path.join(dir, "dist"), path.join(OUT, "themes", entry.alias))
+      preview(path.join(dir, "dist"), path.join(OUT, "themes", entry.alias))
       fs.copyFileSync(path.join(dir, "preview.png"), path.join(OUT, "site", "previews", `${entry.alias}.png`))
       listed.push(entry)
       console.log(`ok    ${line} → ${entry.short} ${entry.version}`)

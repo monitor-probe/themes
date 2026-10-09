@@ -30,8 +30,6 @@ async function cloudflare(url, init = {}) {
   return body
 }
 
-// Run from the repository root, where wrangler finds functions/ and bundles it
-// into every deployment.
 function deploy(dir, branch) {
   execFileSync("npx", ["--yes", "wrangler@4", "pages", "deploy", dir, "--project-name", project,
     "--branch", branch, "--commit-dirty=true"], { cwd: ROOT, stdio: "inherit" })
