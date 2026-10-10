@@ -84,7 +84,7 @@
     const metrics = state === "ok" ? {
       cpu: s.cpu, load: [s.cpu / 50, s.cpu / 60, s.cpu / 70],
       mem_total: memTotal, mem_used: Math.round(memTotal * (0.2 + 0.5 * noise(n.id, 9))),
-      swap_total: GiB, swap_used: 0,
+      swap_total: GiB, swap_used: Math.round(GiB * 0.1),
       disk_total: diskTotal, disk_used: Math.round(diskTotal * (0.1 + 0.8 * noise(n.id, 10))),
       net_rx: s.rx, net_tx: s.tx, tcp: 20 + n.id, udp: 5, procs: 90 + n.id,
       uptime: 86400 * 30 + now % 86400,
@@ -137,9 +137,9 @@
         mem_used: Math.round(memTotal * (0.3 + 0.2 * noise(n.id, ts, 12))),
         disk_used: Math.round(diskTotal * (0.1 + 0.8 * noise(n.id, 10))),
         net_rx: s.rx, net_tx: s.tx, net_rx_max: Math.round(s.rx * peak), net_tx_max: Math.round(s.tx * peak),
-        swap_used: Math.round(GiB * (0.05 + 0.1 * noise(n.id, ts, 13))),
-        tcp: Math.round(20 + n.id + 10 * noise(n.id, ts, 14)), udp: Math.round(5 + 3 * noise(n.id, ts, 15)),
-        procs: Math.round(90 + n.id + 6 * noise(n.id, ts, 16)),
+        swap_used: Math.round(GiB * (0.08 + 0.04 * noise(n.id, ts, 13))),
+        tcp: Math.round(18 + n.id + 4 * noise(n.id, ts, 14)), udp: Math.round(4 + 2 * noise(n.id, ts, 15)),
+        procs: Math.round(88 + n.id + 4 * noise(n.id, ts, 16)),
       })
     }
     // Probe by probe, as the hub orders them. A bucket of several samples carries
