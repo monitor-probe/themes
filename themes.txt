@@ -17,3 +17,4 @@ https://github.com/akanotanin/monitor-theme-commander
 https://github.com/kure29/Monitor-Theme-LuminaPlus
 https://github.com/moxuun/monitor-theme-sketchprobe
 https://github.com/akanotanin/monitor-theme-tty
+https://github.com/ayingQAQ/monitor-theme-guangao
