@@ -137,6 +137,9 @@
         mem_used: Math.round(memTotal * (0.3 + 0.2 * noise(n.id, ts, 12))),
         disk_used: Math.round(diskTotal * (0.1 + 0.8 * noise(n.id, 10))),
         net_rx: s.rx, net_tx: s.tx, net_rx_max: Math.round(s.rx * peak), net_tx_max: Math.round(s.tx * peak),
+        swap_used: Math.round(GiB * (0.05 + 0.1 * noise(n.id, ts, 13))),
+        tcp: Math.round(20 + n.id + 10 * noise(n.id, ts, 14)), udp: Math.round(5 + 3 * noise(n.id, ts, 15)),
+        procs: Math.round(90 + n.id + 6 * noise(n.id, ts, 16)),
       })
     }
     // Probe by probe, as the hub orders them. A bucket of several samples carries
