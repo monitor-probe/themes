@@ -33,9 +33,20 @@ async function cloudflare(url, init = {}) {
   return body
 }
 
-function deploy(dir, branch) {
-  execFileSync("npx", ["--yes", "wrangler@4", "pages", "deploy", dir, "--project-name", project,
-    "--branch", branch, "--commit-dirty=true"], { cwd: ROOT, stdio: "inherit" })
+// Pages now and then fails a deployment with "Unknown internal error" and takes
+// the same files moments later. A retry uploads nothing already uploaded.
+async function deploy(dir, branch) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      execFileSync("npx", ["--yes", "wrangler@4", "pages", "deploy", dir, "--project-name", project,
+        "--branch", branch, "--commit-dirty=true"], { cwd: ROOT, stdio: "inherit" })
+      return
+    } catch (e) {
+      if (attempt === 3) throw e
+      console.log(`deploying ${branch} failed, retrying in 30 s`)
+      await new Promise((r) => setTimeout(r, 30_000))
+    }
+  }
 }
 
 async function main() {
@@ -47,9 +58,9 @@ async function main() {
     const prior = before.get(t.alias)
     if (live?.api === index.api && prior?.version === t.version && prior?.repo === t.repo) continue
     console.log(`deploying ${t.alias} ${t.version}`)
-    deploy(path.join("out", "themes", t.alias), t.alias)
+    await deploy(path.join("out", "themes", t.alias), t.alias)
   }
-  deploy(path.join("out", "site"), "main")
+  await deploy(path.join("out", "site"), "main")
 
   // Listed in full before deleting, since each deletion shifts later pages.
   const all = []
