@@ -71,10 +71,18 @@ async function main() {
       all.push(...result)
     }
   }
+  // One failed deletion does not stop the rest: whatever is left over is listed
+  // and deleted again on the next run. The run still fails, so a deletion that
+  // keeps failing is noticed rather than leaving old deployments piling up.
+  let failed = 0
   for (const d of superseded(all, new Set(["main", ...index.themes.map((t) => t.alias)]))) {
     console.log(`deleting ${branch(d)} deployment ${d.id}`)
-    await cloudflare(`${API}/deployments/${d.id}?force=true`, { method: "DELETE" })
+    await cloudflare(`${API}/deployments/${d.id}?force=true`, { method: "DELETE" }).catch((e) => {
+      console.error(e.message)
+      failed++
+    })
   }
+  if (failed) throw new Error(`${failed} superseded deployment(s) could not be deleted; the next run retries them`)
 }
 
 const branch = (d) => d.deployment_trigger?.metadata?.branch
