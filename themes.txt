@@ -24,3 +24,4 @@ https://github.com/ayingQAQ/monitor-hahaha
 https://github.com/IkiiNet/monitor-theme
 https://github.com/8bitNull/monitor-theme-orbit
 https://github.com/ayingQAQ/monitor-theme-classic
+https://github.com/kiusnax/monitor-theme-yydz
