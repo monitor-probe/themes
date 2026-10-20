@@ -32,3 +32,4 @@ https://github.com/akanotanin/monitor-theme-kanso
 https://github.com/bluesmkun/y2k
 https://github.com/K23Flux/K23Flux-monitor-theme-ping
 https://github.com/kisukri/monitor-theme-crt
+https://github.com/bluesmkun/docxq
