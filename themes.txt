@@ -40,3 +40,4 @@ https://github.com/LYISTR2/monitor-theme-phosphor
 https://github.com/ayingQAQ/monitor-theme-omarchy
 https://github.com/NSJLUCAS/football-monitor
 https://github.com/ayingQAQ/monitor-ascii-pond
+https://github.com/exing567/monitor-theme-ascii-probe
