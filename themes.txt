@@ -41,3 +41,5 @@ https://github.com/ayingQAQ/monitor-theme-omarchy
 https://github.com/NSJLUCAS/football-monitor
 https://github.com/ayingQAQ/monitor-ascii-pond
 https://github.com/exing567/monitor-theme-ascii-probe
+
+https://github.com/allen0039/monitor-theme-Qingyu
