@@ -43,3 +43,4 @@ https://github.com/ayingQAQ/monitor-ascii-pond
 https://github.com/exing567/monitor-theme-ascii-probe
 https://github.com/ywz98280/minimalist-probe-vision-theme
 https://github.com/3922510-creator/monitor-theme-paper
+https://github.com/jeannnz/monitor-theme-vibe
