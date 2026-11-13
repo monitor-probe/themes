@@ -45,3 +45,4 @@ https://github.com/ywz98280/minimalist-probe-vision-theme
 https://github.com/3922510-creator/monitor-theme-paper
 https://github.com/jeannnz/monitor-theme-vibe
 https://github.com/akanotanin/monitor-theme-niwatori
+https://github.com/Ethan2258/monitor-theme-inkpond
